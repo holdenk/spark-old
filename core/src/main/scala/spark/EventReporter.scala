@@ -9,39 +9,20 @@ import java.io._
 sealed trait EventReporterMessage
 case class ReportException(exception: Throwable) extends EventReporterMessage
 case class ReportRDDCreation(rdd: RDD[_]) extends EventReporterMessage
-case class ReportParallelCollectionCreation[T](data: Seq[T], numSlices: Int) extends EventReporterMessage
 case class ReportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) extends EventReporterMessage
 
 class EventReporterActor(dispatcher: MessageDispatcher) extends Actor with Logging {
   self.dispatcher = dispatcher
 
-  val eventLog =
-    try {
-      val file = new File(System.getProperty("spark.logging.eventLog"))
-      if (!file.exists) {
-        Some(new ObjectOutputStream(new FileOutputStream(file)))
-      } else {
-        logWarning("Event log %s already exists".format(System.getProperty("spark.logging.eventLog")))
-        None
-      }
-    } catch {
-      case e: FileNotFoundException =>
-        logWarning("Can't write to %s: %s".format(System.getProperty("spark.logging.eventLog"), e))
-        None
-    }
+  val eventLogWriter = new EventLogWriter
 
   def receive = {
-    case ReportRDDCreation(rdd) => rdd match {
-      case pc: ParallelCollection[_] =>
-        for (l <- eventLog)
-          l.writeObject(ReportParallelCollectionCreation(pc.data, pc.numSlices))
-      case _ =>
-        for (l <- eventLog)
-          l.writeObject(ReportRDDCreation(rdd))
-    }
-
-    case otherMsg: EventReporterMessage =>
-      for (l <- eventLog) l.writeObject(otherMsg)
+    case ReportException(exception) =>
+      eventLogWriter.log(ExceptionEvent(exception))
+    case ReportRDDCreation(rdd) =>
+      eventLogWriter.log(RDDCreation(rdd))
+    case ReportRDDChecksum(rdd, split, checksum) =>
+      eventLogWriter.log(RDDChecksum(rdd, split, checksum))
   }
 }
 
