@@ -48,8 +48,8 @@ extends RDD[String](parent.context) {
     Source.fromInputStream(proc.getInputStream).getLines
   }
 
-  override def setContext(newContext: SparkContext): PipedRDD[T] =
-    new PipedRDD(parent.setContext(newContext), command)
+  override def restoreContext(sc: SparkContext): PipedRDD[T] =
+    new PipedRDD(parent.restoreContext(sc), command)
 }
 
 object PipedRDD {

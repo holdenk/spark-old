@@ -41,6 +41,6 @@ extends RDD[Pair[T, U]](sc) with Serializable {
     }
   )
 
-  override def setContext(newContext: SparkContext): CartesianRDD[T, U] =
-    new CartesianRDD(newContext, rdd1.setContext(newContext), rdd2.setContext(newContext))
+  override def restoreContext(sc: SparkContext): CartesianRDD[T, U] =
+    new CartesianRDD(sc, rdd1.restoreContext(sc), rdd2.restoreContext(sc))
 }

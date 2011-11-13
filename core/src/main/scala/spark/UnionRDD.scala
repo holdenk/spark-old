@@ -39,6 +39,6 @@ extends RDD[T](sc) with Serializable {
   override def preferredLocations(s: Split): Seq[String] =
     s.asInstanceOf[UnionSplit[T]].preferredLocations()
 
-  override def setContext(newContext: SparkContext): UnionRDD[T] =
-    new UnionRDD(newContext, rdds.map(_.setContext(newContext)))
+  override def restoreContext(sc: SparkContext): UnionRDD[T] =
+    new UnionRDD(sc, rdds.map(_.restoreContext(sc)))
 }

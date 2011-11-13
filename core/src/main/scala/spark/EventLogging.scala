@@ -10,23 +10,26 @@ case class RDDChecksum(rdd: RDD[_], split: Split, checksum: Int) extends EventLo
 
 class EventLogWriter extends Logging {
   val eventLog =
-    try {
-      val file = new File(System.getProperty("spark.logging.eventLog"))
-      if (!file.exists) {
-        Some(new ObjectOutputStream(new FileOutputStream(file)))
-      } else {
-        None
+    if (System.getProperty("spark.logging.eventLog") != null) {
+      try {
+        val file = new File(System.getProperty("spark.logging.eventLog"))
+        if (!file.exists) {
+          Some(new ObjectOutputStream(new FileOutputStream(file)))
+        } else {
+          None
+        }
+      } catch {
+        case e: FileNotFoundException =>
+          logWarning("Can't write to %s: %s".format(System.getProperty("spark.logging.eventLog"), e))
+          None
       }
-    } catch {
-      case e: FileNotFoundException =>
-        logWarning("Can't write to %s: %s".format(System.getProperty("spark.logging.eventLog"), e))
-        None
+    } else {
+      None
     }
 
   def log(entry: EventLogEntry) {
-    for (l <- eventLog) {
+    for (l <- eventLog)
       l.writeObject(entry)
-    }
   }
 }
 
@@ -36,9 +39,12 @@ class EventLogReader(sc: SparkContext) {
   try {
     while (true) {
       events += (ois.readObject.asInstanceOf[EventLogEntry] match {
-        case ExceptionEvent(exception) => ExceptionEvent(exception)
-        case RDDCreation(rdd) => RDDCreation(rdd.setContext(sc))
-        case RDDChecksum(rdd, split, checksum) => RDDChecksum(rdd, split, checksum)
+        case ExceptionEvent(exception) =>
+          ExceptionEvent(exception)
+        case RDDCreation(rdd) =>
+          RDDCreation(rdd.restoreContext(sc))
+        case RDDChecksum(rdd, split, checksum) =>
+          RDDChecksum(rdd, split, checksum)
       })
     }
   } catch {

@@ -302,8 +302,8 @@ extends RDD[(K, U)](prev.context) {
   override val partitioner = prev.partitioner
   override def compute(split: Split) =
     prev.iterator(split).map{case (k, v) => (k, f(v))}
-  override def setContext(newContext: SparkContext): MappedValuesRDD[K, V, U] =
-    new MappedValuesRDD(prev.setContext(newContext), f)
+  override def restoreContext(sc: SparkContext): MappedValuesRDD[K, V, U] =
+    new MappedValuesRDD(prev.restoreContext(sc), f)
 }
 
 class FlatMappedValuesRDD[K, V, U](
@@ -317,8 +317,8 @@ extends RDD[(K, U)](prev.context) {
       case (k, v) => f(v).map(x => (k, x))
     }.iterator
   }
-  override def setContext(newContext: SparkContext): FlatMappedValuesRDD[K, V, U] =
-    new FlatMappedValuesRDD(prev.setContext(newContext), f)
+  override def restoreContext(sc: SparkContext): FlatMappedValuesRDD[K, V, U] =
+    new FlatMappedValuesRDD(prev.restoreContext(sc), f)
 }
 
 object Manifests {
