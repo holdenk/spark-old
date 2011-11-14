@@ -16,6 +16,7 @@ class EventLogWriter extends Logging {
         if (!file.exists) {
           Some(new ObjectOutputStream(new FileOutputStream(file)))
         } else {
+          logWarning("Event log %s already exists".format(System.getProperty("spark.logging.eventLog")))
           None
         }
       } catch {
