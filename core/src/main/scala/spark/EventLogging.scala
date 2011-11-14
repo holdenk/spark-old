@@ -5,7 +5,7 @@ import scala.collection.mutable.ArrayBuffer
 
 sealed trait EventLogEntry
 case class ExceptionEvent(exception: Throwable) extends EventLogEntry
-case class RDDCreation(rdd: RDD[_]) extends EventLogEntry
+case class RDDCreation(rdd: RDD[_], location: StackTraceElement) extends EventLogEntry
 case class RDDChecksum(rdd: RDD[_], split: Split, checksum: Int) extends EventLogEntry
 
 class EventLogWriter extends Logging {
@@ -42,8 +42,8 @@ class EventLogReader(sc: SparkContext) {
       events += (ois.readObject.asInstanceOf[EventLogEntry] match {
         case ExceptionEvent(exception) =>
           ExceptionEvent(exception)
-        case RDDCreation(rdd) =>
-          RDDCreation(rdd.restoreContext(sc))
+        case RDDCreation(rdd, location) =>
+          RDDCreation(rdd.restoreContext(sc), location)
         case RDDChecksum(rdd, split, checksum) =>
           RDDChecksum(rdd, split, checksum)
       })
@@ -53,5 +53,5 @@ class EventLogReader(sc: SparkContext) {
   }
   ois.close()
 
-  def rdds = events.collect { case RDDCreation(rdd) => rdd }
+  def rdds = events.collect { case RDDCreation(rdd, location) => rdd }
 }

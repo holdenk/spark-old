@@ -66,7 +66,7 @@ abstract class RDD[T: ClassManifest](@transient private var sc: SparkContext) ex
   // Variables relating to caching
   private var shouldCache = false
 
-  SparkEnv.get.eventReporter.reportRDDCreation(this)
+  SparkEnv.get.eventReporter.reportRDDCreation(this, Thread.currentThread.getStackTrace()(3))
   
   // Change this RDD's caching
   def cache(): RDD[T] = {
