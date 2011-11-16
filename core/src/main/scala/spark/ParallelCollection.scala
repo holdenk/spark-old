@@ -39,8 +39,9 @@ extends RDD[T](sc) {
   
   override val dependencies: List[Dependency[_]] = Nil
 
-  override def restoreContext(sc: SparkContext): ParallelCollection[T] =
-    new ParallelCollection(sc, data, numSlices)
+  override private[spark] def context_=(sc: SparkContext) {
+    super.context = sc
+  }
 }
 
 private object ParallelCollection {

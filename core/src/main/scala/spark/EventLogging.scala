@@ -43,7 +43,8 @@ class EventLogReader(sc: SparkContext) {
         case ExceptionEvent(exception) =>
           ExceptionEvent(exception)
         case RDDCreation(rdd, location) =>
-          RDDCreation(rdd.restoreContext(sc), location)
+          rdd.context = sc
+          RDDCreation(rdd, location)
         case RDDChecksum(rdd, split, checksum) =>
           RDDChecksum(rdd, split, checksum)
       })

@@ -111,6 +111,7 @@ extends RDD[(K, V)](sc) {
   
   override val dependencies: List[Dependency[_]] = Nil
 
-  override def restoreContext(sc: SparkContext): HadoopRDD[K, V] =
-    new HadoopRDD(sc, serializableConf.value, inputFormatClass, keyClass, valueClass, minSplits)
+  override private[spark] def context_=(sc: SparkContext) {
+    super.context = sc
+  }
 }

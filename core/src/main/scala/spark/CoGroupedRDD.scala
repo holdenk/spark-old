@@ -90,6 +90,9 @@ extends RDD[(K, Seq[Seq[_]])](rdds.head.context) with Logging {
     map.iterator
   }
 
-  override def restoreContext(sc: SparkContext): CoGroupedRDD[K] =
-    new CoGroupedRDD(rdds.map(_.restoreContext(sc)), part)
+  override private[spark] def context_=(sc: SparkContext) {
+    super.context = sc
+    for (rdd <- rdds)
+      rdd.context = sc
+  }
 }

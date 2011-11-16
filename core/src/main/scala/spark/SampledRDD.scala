@@ -34,6 +34,8 @@ extends RDD[T](prev.context) {
     }
   }
 
-  override def restoreContext(sc: SparkContext): SampledRDD[T] =
-    new SampledRDD(prev.restoreContext(sc), withReplacement, frac, seed)
+  override private[spark] def context_=(sc: SparkContext) {
+    super.context = sc
+    prev.context = sc
+  }
 }

@@ -39,6 +39,8 @@ extends RDD[(K, C)](parent.context) {
     combiners.iterator
   }
 
-  override def restoreContext(sc: SparkContext): ShuffledRDD[K, V, C] =
-    new ShuffledRDD(parent.restoreContext(sc), aggregator, part)
+  override private[spark] def context_=(sc: SparkContext) {
+    super.context = sc
+    parent.context = sc
+  }
 }
