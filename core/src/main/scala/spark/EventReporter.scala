@@ -8,8 +8,7 @@ import java.io._
 
 sealed trait EventReporterMessage
 case class ReportException(exception: Throwable) extends EventReporterMessage
-case class ReportRDDCreation(rdd: RDD[_], location: StackTraceElement) extends EventReporterMessage
-case class ReportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) extends EventReporterMessage
+case class ReportRDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventReporterMessage
 
 class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLogWriter) extends Actor with Logging {
   self.dispatcher = dispatcher
@@ -17,10 +16,8 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
   def receive = {
     case ReportException(exception) =>
       eventLogWriter.log(ExceptionEvent(exception))
-    case ReportRDDCreation(rdd, location) =>
-      eventLogWriter.log(RDDCreation(rdd, location))
-    case ReportRDDChecksum(rdd, split, checksum) =>
-      eventLogWriter.log(RDDChecksum(rdd, split, checksum))
+    case ReportRDDChecksum(rddId, splitIndex, checksum) =>
+      eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
   }
 }
 
@@ -51,6 +48,6 @@ class EventReporter(isMaster: Boolean) extends Logging {
   }
 
   def reportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) {
-//    reporterActor ! ReportRDDChecksum(rdd, split, checksum)
+    reporterActor ! ReportRDDChecksum(rdd.id, split.index, checksum)
   }
 }
