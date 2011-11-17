@@ -41,7 +41,7 @@ extends RDD[(K, Seq[Seq[_]])](rdds.head.context) with Logging {
     deps.toList
   }
   
-  @transient val splits_ : Array[Split] = {
+  @transient private var splits_ : Array[Split] = {
     val firstRdd = rdds.head
     val array = new Array[Split](part.numPartitions)
     for (i <- 0 until array.size) {
@@ -90,9 +90,23 @@ extends RDD[(K, Seq[Seq[_]])](rdds.head.context) with Logging {
     map.iterator
   }
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    for (rdd <- rdds)
-      rdd.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[Split]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }

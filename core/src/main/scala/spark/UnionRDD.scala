@@ -11,7 +11,7 @@ extends Split with Serializable {
 
 class UnionRDD[T: ClassManifest](sc: SparkContext, rdds: Seq[RDD[T]])
 extends RDD[T](sc) with Serializable {
-  @transient val splits_ : Array[Split] = {
+  @transient private var splits_ : Array[Split] = {
     val array = new Array[Split](rdds.map(_.splits.size).sum)
     var pos = 0
     for (rdd <- rdds; split <- rdd.splits) {
@@ -39,9 +39,23 @@ extends RDD[T](sc) with Serializable {
   override def preferredLocations(s: Split): Seq[String] =
     s.asInstanceOf[UnionSplit[T]].preferredLocations()
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    for (rdd <- rdds)
-      rdd.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[Split]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }

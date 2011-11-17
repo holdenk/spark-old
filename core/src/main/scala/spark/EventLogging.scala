@@ -14,7 +14,7 @@ class EventLogWriter extends Logging {
       try {
         val file = new File(System.getProperty("spark.logging.eventLog"))
         if (!file.exists) {
-          Some(new ObjectOutputStream(new FileOutputStream(file)))
+          Some(new EventLogOutputStream(new FileOutputStream(file)))
         } else {
           logWarning("Event log %s already exists".format(System.getProperty("spark.logging.eventLog")))
           None
@@ -34,8 +34,12 @@ class EventLogWriter extends Logging {
   }
 }
 
+class EventLogOutputStream(out: OutputStream) extends ObjectOutputStream(out)
+
+class EventLogInputStream(in: InputStream, val sc: SparkContext) extends ObjectInputStream(in)
+
 class EventLogReader(sc: SparkContext) {
-  val ois = new ObjectInputStream(new FileInputStream(System.getProperty("spark.logging.eventLog")))
+  val ois = new EventLogInputStream(new FileInputStream(System.getProperty("spark.logging.eventLog")), sc)
   val events = new ArrayBuffer[EventLogEntry]
   try {
     while (true) {
@@ -43,7 +47,6 @@ class EventLogReader(sc: SparkContext) {
         case ExceptionEvent(exception) =>
           ExceptionEvent(exception)
         case RDDCreation(rdd, location) =>
-          rdd.context = sc
           RDDCreation(rdd, location)
         case RDDChecksum(rdd, split, checksum) =>
           RDDChecksum(rdd, split, checksum)
@@ -53,6 +56,7 @@ class EventLogReader(sc: SparkContext) {
     case e: EOFException => {}
   }
   ois.close()
+  System.out.println()
 
   def rdds = events.collect { case RDDCreation(rdd, location) => rdd }
 }

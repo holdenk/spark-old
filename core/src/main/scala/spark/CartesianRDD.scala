@@ -10,7 +10,7 @@ class CartesianRDD[T: ClassManifest, U:ClassManifest](
 extends RDD[Pair[T, U]](sc) with Serializable {
   val numSplitsInRdd2 = rdd2.splits.size
   
-  @transient val splits_ = {
+  @transient private var splits_ = {
     // create the cross product split
     val array = new Array[Split](rdd1.splits.size * rdd2.splits.size)
     for (s1 <- rdd1.splits; s2 <- rdd2.splits) {
@@ -41,9 +41,23 @@ extends RDD[Pair[T, U]](sc) with Serializable {
     }
   )
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    rdd1.context = sc
-    rdd2.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[Split]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }

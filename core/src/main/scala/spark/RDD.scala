@@ -2,7 +2,6 @@ package spark
 
 import java.io.EOFException
 import java.net.URL
-import java.io.ObjectInputStream
 import java.util.concurrent.atomic.AtomicLong
 import java.util.HashSet
 import java.util.Random
@@ -57,21 +56,19 @@ abstract class RDD[T: ClassManifest](@transient private var sc: SparkContext) ex
   // Optionally overridden by subclasses to specify placement preferences
   def preferredLocations(split: Split): Seq[String] = Nil
 
+  // Leaf subclasses should call this method at the end of their constructors
+  protected def reportCreation() {
+    SparkEnv.get.eventReporter.reportRDDCreation(this, Thread.currentThread.getStackTrace()(3))
+  }
+
   def context = sc
 
-  // Optionally overridden by subclasses to set SparkContext recursively
-  private[spark] def context_=(sc: SparkContext) {
-    this.sc = sc
-  }
-  
   // Get a unique ID for this RDD
   val id = sc.newRddId()
   
   // Variables relating to caching
   private var shouldCache = false
 
-  SparkEnv.get.eventReporter.reportRDDCreation(this, Thread.currentThread.getStackTrace()(3))
-  
   // Change this RDD's caching
   def cache(): RDD[T] = {
     shouldCache = true
@@ -199,6 +196,15 @@ abstract class RDD[T: ClassManifest](@transient private var sc: SparkContext) ex
   def saveAsObjectFile(path: String) {
     this.glom.map(x => (NullWritable.get(), new BytesWritable(Utils.serialize(x)))).saveAsSequenceFile(path)
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        sc = s.sc
+      case _ => {}
+    }
+  }
 }
 
 class MappedRDD[U: ClassManifest, T: ClassManifest](
@@ -207,10 +213,7 @@ extends RDD[U](prev.context) {
   override def splits = prev.splits
   override val dependencies = List(new OneToOneDependency(prev))
   override def compute(split: Split) = prev.iterator(split).map(f)
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
-  }
+  reportCreation()
 }
 
 class FlatMappedRDD[U: ClassManifest, T: ClassManifest](
@@ -219,10 +222,7 @@ extends RDD[U](prev.context) {
   override def splits = prev.splits
   override val dependencies = List(new OneToOneDependency(prev))
   override def compute(split: Split) = prev.iterator(split).flatMap(f)
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
-  }
+  reportCreation()
 }
 
 class FilteredRDD[T: ClassManifest](
@@ -231,10 +231,7 @@ extends RDD[T](prev.context) {
   override def splits = prev.splits
   override val dependencies = List(new OneToOneDependency(prev))
   override def compute(split: Split) = prev.iterator(split).filter(f)
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
-  }
+  reportCreation()
 }
 
 class GlommedRDD[T: ClassManifest](prev: RDD[T])
@@ -242,10 +239,7 @@ extends RDD[Array[T]](prev.context) {
   override def splits = prev.splits
   override val dependencies = List(new OneToOneDependency(prev))
   override def compute(split: Split) = Array(prev.iterator(split).toArray).iterator
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
-  }
+  reportCreation()
 }
 
 class MapPartitionsRDD[U: ClassManifest, T: ClassManifest](
@@ -254,8 +248,5 @@ extends RDD[U](prev.context) {
   override def splits = prev.splits
   override val dependencies = List(new OneToOneDependency(prev))
   override def compute(split: Split) = f(prev.iterator(split))
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
-  }
+  reportCreation()
 }

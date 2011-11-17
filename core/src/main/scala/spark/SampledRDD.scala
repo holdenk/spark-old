@@ -10,7 +10,7 @@ class SampledRDD[T: ClassManifest](
   prev: RDD[T], withReplacement: Boolean, frac: Double, seed: Int)
 extends RDD[T](prev.context) {
 
-  @transient val splits_ = { val rg = new Random(seed); prev.splits.map(x => new SampledRDDSplit(x, rg.nextInt)) }
+  @transient private var splits_ = { val rg = new Random(seed); prev.splits.map(x => new SampledRDDSplit(x, rg.nextInt)) }
 
   override def splits = splits_.asInstanceOf[Array[Split]]
 
@@ -34,8 +34,23 @@ extends RDD[T](prev.context) {
     }
   }
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    prev.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[SampledRDDSplit]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }

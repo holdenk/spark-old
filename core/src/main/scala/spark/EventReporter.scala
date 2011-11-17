@@ -11,10 +11,8 @@ case class ReportException(exception: Throwable) extends EventReporterMessage
 case class ReportRDDCreation(rdd: RDD[_], location: StackTraceElement) extends EventReporterMessage
 case class ReportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) extends EventReporterMessage
 
-class EventReporterActor(dispatcher: MessageDispatcher) extends Actor with Logging {
+class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLogWriter) extends Actor with Logging {
   self.dispatcher = dispatcher
-
-  val eventLogWriter = new EventLogWriter
 
   def receive = {
     case ReportException(exception) =>
@@ -29,12 +27,13 @@ class EventReporterActor(dispatcher: MessageDispatcher) extends Actor with Loggi
 class EventReporter(isMaster: Boolean) extends Logging {
   val host = System.getProperty("spark.master.host")
   val port = System.getProperty("spark.master.akkaPort").toInt
+  val eventLogWriter = if (isMaster) Some(new EventLogWriter) else None
 
   // Remote reference to the actor on workers
   var reporterActor: ActorRef = {
-    if (isMaster) {
+    for (elw <- eventLogWriter) {
       val dispatcher = new DaemonDispatcher("mydispatcher")
-      remote.start(host, port).register("EventReporter", actorOf(new EventReporterActor(dispatcher)))
+      remote.start(host, port).register("EventReporter", actorOf(new EventReporterActor(dispatcher, elw)))
     }
     remote.actorFor("EventReporter", host, port)
   }
@@ -44,10 +43,14 @@ class EventReporter(isMaster: Boolean) extends Logging {
   }
 
   def reportRDDCreation(rdd: RDD[_], location: StackTraceElement) {
-    reporterActor ! ReportRDDCreation(rdd, location)
+    // Bypass the actor for this to avoid serializing the RDD, which
+    // would interfere with the automatic back-referencing done during
+    // Java serialization.
+    for (elw <- eventLogWriter)
+      elw.log(RDDCreation(rdd, location))
   }
 
   def reportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) {
-    reporterActor ! ReportRDDChecksum(rdd, split, checksum)
+//    reporterActor ! ReportRDDChecksum(rdd, split, checksum)
   }
 }

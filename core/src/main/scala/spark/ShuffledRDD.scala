@@ -16,7 +16,7 @@ extends RDD[(K, C)](parent.context) {
   //override val partitioner = Some(part)
   override val partitioner = Some(part)
   
-  @transient val splits_ =
+  @transient private var splits_ =
     Array.tabulate[Split](part.numPartitions)(i => new ShuffledRDDSplit(i))
 
   override def splits = splits_
@@ -39,8 +39,23 @@ extends RDD[(K, C)](parent.context) {
     combiners.iterator
   }
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
-    parent.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[Split]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }

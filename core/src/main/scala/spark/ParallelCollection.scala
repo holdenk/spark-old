@@ -20,13 +20,13 @@ extends Split with Serializable {
 }
 
 class ParallelCollection[T: ClassManifest](
-  sc: SparkContext, data: Seq[T], numSlices: Int)
+  sc: SparkContext, @transient data: Seq[T], numSlices: Int)
 extends RDD[T](sc) {
   // TODO: Right now, each split sends along its full data, even if later down
   // the RDD chain it gets cached. It might be worthwhile to write the data to
   // a file in the DFS and read it in the split instead.
 
-  @transient val splits_ = {
+  @transient private var splits_ = {
     val slices = ParallelCollection.slice(data, numSlices).toArray
     slices.indices.map(i => new ParallelCollectionSplit(id, i, slices(i))).toArray
   }
@@ -39,9 +39,25 @@ extends RDD[T](sc) {
   
   override val dependencies: List[Dependency[_]] = Nil
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[ParallelCollectionSplit[T]]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }
 
 private object ParallelCollection {

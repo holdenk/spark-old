@@ -37,7 +37,7 @@ class HadoopRDD[K, V](
 extends RDD[(K, V)](sc) {
   val serializableConf = new SerializableWritable(conf)
   
-  @transient val splits_ : Array[Split] = {
+  @transient private var splits_ : Array[Split] = {
     val inputFormat = createInputFormat(conf)
     val inputSplits = inputFormat.getSplits(conf, minSplits)
     val array = new Array[Split] (inputSplits.size)
@@ -111,7 +111,23 @@ extends RDD[(K, V)](sc) {
   
   override val dependencies: List[Dependency[_]] = Nil
 
-  override private[spark] def context_=(sc: SparkContext) {
-    super.context = sc
+  private def writeObject(stream: java.io.ObjectOutputStream) {
+    stream.defaultWriteObject()
+    stream match {
+      case _: EventLogOutputStream =>
+        stream.writeObject(splits_)
+      case _ => {}
+    }
   }
+
+  private def readObject(stream: java.io.ObjectInputStream) {
+    stream.defaultReadObject()
+    stream match {
+      case s: EventLogInputStream =>
+        splits_ = s.readObject().asInstanceOf[Array[Split]]
+      case _ => {}
+    }
+  }
+
+  reportCreation()
 }
