@@ -51,5 +51,16 @@ class EventLogReader(sc: SparkContext) {
   ois.close()
   System.out.println()
 
-  def rdds = events.collect { case RDDCreation(rdd, location) => rdd }
+  def rdds = for (RDDCreation(rdd, location) <- events) yield rdd
+
+  def printRDDs() {
+    for (RDDCreation(rdd, location) <- events) {
+      println("#%02d: %-20s %s".format(rdd.id, rdd.getClass.getName.replaceFirst("""^spark\.""", ""), firstExternalElement(location)))
+    }
+  }
+
+  def firstExternalElement(location: Array[StackTraceElement]) =
+    (location.tail.find(!_.getClassName.matches("""spark\.[A-Z].*"""))
+      orElse { location.headOption }
+      getOrElse { "" })
 }
