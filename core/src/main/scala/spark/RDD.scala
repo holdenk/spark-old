@@ -58,7 +58,7 @@ abstract class RDD[T: ClassManifest](@transient private var sc: SparkContext) ex
 
   // Leaf subclasses should call this method at the end of their constructors
   protected def reportCreation() {
-    SparkEnv.get.eventReporter.reportRDDCreation(this, Thread.currentThread.getStackTrace()(3))
+    SparkEnv.get.eventReporter.reportRDDCreation(this, Thread.currentThread.getStackTrace)
   }
 
   def context = sc

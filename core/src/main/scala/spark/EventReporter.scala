@@ -39,7 +39,7 @@ class EventReporter(isMaster: Boolean) extends Logging {
     reporterActor ! ReportException(exception)
   }
 
-  def reportRDDCreation(rdd: RDD[_], location: StackTraceElement) {
+  def reportRDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) {
     // Bypass the actor for this to avoid serializing the RDD, which
     // would interfere with the automatic back-referencing done during
     // Java serialization.

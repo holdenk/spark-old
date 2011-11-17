@@ -5,7 +5,7 @@ import scala.collection.mutable.ArrayBuffer
 
 sealed trait EventLogEntry
 case class ExceptionEvent(exception: Throwable) extends EventLogEntry
-case class RDDCreation(rdd: RDD[_], location: StackTraceElement) extends EventLogEntry
+case class RDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) extends EventLogEntry
 case class RDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventLogEntry
 
 class EventLogWriter extends Logging {
