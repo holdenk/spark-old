@@ -29,8 +29,10 @@ class EventLogWriter extends Logging {
     }
 
   def log(entry: EventLogEntry) {
-    for (l <- eventLog)
+    for (l <- eventLog) {
       l.writeObject(entry)
+      l.flush()
+    }
   }
 }
 
@@ -41,15 +43,7 @@ class EventLogInputStream(in: InputStream, val sc: SparkContext) extends ObjectI
 class EventLogReader(sc: SparkContext) {
   val ois = new EventLogInputStream(new FileInputStream(System.getProperty("spark.logging.eventLog")), sc)
   val events = new ArrayBuffer[EventLogEntry]
-  try {
-    while (true) {
-      events += ois.readObject.asInstanceOf[EventLogEntry]
-    }
-  } catch {
-    case e: EOFException => {}
-  }
-  ois.close()
-  System.out.println()
+  loadNewEvents()
 
   def rdds = for (RDDCreation(rdd, location) <- events) yield rdd
 
@@ -63,4 +57,14 @@ class EventLogReader(sc: SparkContext) {
     (location.tail.find(!_.getClassName.matches("""spark\.[A-Z].*"""))
       orElse { location.headOption }
       getOrElse { "" })
+
+  def loadNewEvents() {
+    try {
+      while (true) {
+        events += ois.readObject.asInstanceOf[EventLogEntry]
+      }
+    } catch {
+      case e: EOFException => {}
+    }
+  }
 }
