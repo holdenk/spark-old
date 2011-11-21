@@ -21,17 +21,17 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
   }
 }
 
-class EventReporter(isMaster: Boolean) extends Logging {
+class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Logging {
   val host = System.getProperty("spark.master.host")
-  val port = System.getProperty("spark.master.akkaPort").toInt
   val eventLogWriter = if (isMaster) Some(new EventLogWriter) else None
 
   // Remote reference to the actor on workers
   var reporterActor: ActorRef = {
     for (elw <- eventLogWriter) {
-      val dispatcher = new DaemonDispatcher("mydispatcher")
-      remote.start(host, port).register("EventReporter", actorOf(new EventReporterActor(dispatcher, elw)))
+      remote.register("EventReporter", actorOf(new EventReporterActor(dispatcher, elw)))
     }
+    val port = System.getProperty("spark.master.akkaPort").toInt
+    logInfo("Binding to Akka at %s:%d".format(host, port))
     remote.actorFor("EventReporter", host, port)
   }
 
