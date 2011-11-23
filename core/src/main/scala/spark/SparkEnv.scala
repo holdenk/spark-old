@@ -1,6 +1,7 @@
 package spark
 
 import akka.actor.Actor._
+import org.jboss.netty.channel.ChannelException
 
 class SparkEnv (
   val cache: Cache,
@@ -39,9 +40,19 @@ object SparkEnv extends Logging {
     // Initialize the Akka server on the master
     if (isMaster) {
       val host = System.getProperty("spark.master.host")
-      val remoteServer = remote.start(host, Utils.freePort)
-      System.setProperty("spark.master.akkaPort", remoteServer.address.getPort.toString)
-      logInfo("Akka listening at %s:%d".format(host, remoteServer.address.getPort))
+      // Repeatedly try to bind to a free port
+      var foundFreePort = false
+      while (!foundFreePort) {
+        try {
+          val remoteServer = remote.start(host, Utils.freePort)
+          System.setProperty("spark.master.akkaPort", remoteServer.address.getPort.toString)
+          logInfo("Akka listening at %s:%d".format(host, remoteServer.address.getPort))
+          foundFreePort = true
+        } catch {
+          case _: ChannelException => {}
+          case e => throw e
+        }
+      }
     }
     val akkaDispatcher = new DaemonDispatcher("dispatcher")
 
