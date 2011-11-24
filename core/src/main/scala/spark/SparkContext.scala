@@ -183,13 +183,14 @@ extends Logging {
 
   // Stop the SparkContext
   def stop() {
-     scheduler.stop()
-     scheduler = null
-     // TODO: Broadcast.stop(), Cache.stop()?
-     env.mapOutputTracker.stop()
-     env.cacheTracker.stop()
-     env.shuffleFetcher.stop()
-     SparkEnv.set(null)
+    scheduler.stop()
+    scheduler = null
+    // TODO: Broadcast.stop(), Cache.stop()?
+    env.mapOutputTracker.stop()
+    env.cacheTracker.stop()
+    env.shuffleFetcher.stop()
+    env.eventReporter.stop()
+    SparkEnv.set(null)
   }
 
   // Wait for the scheduler to be registered
@@ -270,6 +271,13 @@ extends Logging {
   // Register a new RDD, returning its RDD ID
   private[spark] def newRddId(): Int = {
     nextRddId.getAndIncrement()
+  }
+
+  // Move the next RDD ID so that it will not conflict with the given id
+  private[spark] def updateRddId(id: Int) {
+    val delta = id - nextRddId.get + 1
+    if (delta > 0)
+      nextRddId.addAndGet(delta)
   }
 }
 

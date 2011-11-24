@@ -34,11 +34,19 @@ class EventLogWriter extends Logging {
       l.flush()
     }
   }
+
+  def stop() {
+    for (l <- eventLog)
+      l.close()
+  }
 }
 
 class EventLogOutputStream(out: OutputStream) extends ObjectOutputStream(out)
 
-class EventLogInputStream(in: InputStream, val sc: SparkContext) extends ObjectInputStream(in)
+class EventLogInputStream(in: InputStream, val sc: SparkContext) extends ObjectInputStream(in) {
+  override def resolveClass(desc: ObjectStreamClass) =
+    Class.forName(desc.getName, false, Thread.currentThread.getContextClassLoader)
+}
 
 class EventLogReader(sc: SparkContext) {
   val ois = new EventLogInputStream(new FileInputStream(System.getProperty("spark.logging.eventLog")), sc)
@@ -61,7 +69,12 @@ class EventLogReader(sc: SparkContext) {
   def loadNewEvents() {
     try {
       while (true) {
-        events += ois.readObject.asInstanceOf[EventLogEntry]
+        val event = ois.readObject.asInstanceOf[EventLogEntry]
+        events += event
+        event match {
+          case RDDCreation(rdd, location) => sc.updateRddId(rdd.id)
+          case _ => {}
+        }
       }
     } catch {
       case e: EOFException => {}

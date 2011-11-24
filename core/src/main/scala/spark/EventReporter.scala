@@ -50,4 +50,9 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
   def reportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) {
     reporterActor ! ReportRDDChecksum(rdd.id, split.index, checksum)
   }
+
+  def stop() {
+    for (elw <- eventLogWriter)
+      elw.stop()
+  }
 }
