@@ -8,25 +8,12 @@ case class ExceptionEvent(exception: Throwable) extends EventLogEntry
 case class RDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) extends EventLogEntry
 case class RDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventLogEntry
 
-class EventLogWriter extends Logging {
-  val eventLog =
-    if (System.getProperty("spark.logging.eventLog") != null) {
-      try {
-        val file = new File(System.getProperty("spark.logging.eventLog"))
-        if (!file.exists) {
-          Some(new EventLogOutputStream(new FileOutputStream(file)))
-        } else {
-          logWarning("Event log %s already exists".format(System.getProperty("spark.logging.eventLog")))
-          None
-        }
-      } catch {
-        case e: FileNotFoundException =>
-          logWarning("Can't write to %s: %s".format(System.getProperty("spark.logging.eventLog"), e))
-          None
-      }
-    } else {
-      None
-    }
+class EventLogWriter(eventLogPath: Option[String] = None) extends Logging {
+  val eventLog = for {
+    elp <- eventLogPath orElse { Option(System.getProperty("spark.logging.eventLog")) }
+    file = new File(elp)
+    if !file.exists
+  } yield new EventLogOutputStream(new FileOutputStream(file))
 
   def log(entry: EventLogEntry) {
     for (l <- eventLog) {
@@ -48,8 +35,12 @@ class EventLogInputStream(in: InputStream, val sc: SparkContext) extends ObjectI
     Class.forName(desc.getName, false, Thread.currentThread.getContextClassLoader)
 }
 
-class EventLogReader(sc: SparkContext) {
-  val ois = new EventLogInputStream(new FileInputStream(System.getProperty("spark.logging.eventLog")), sc)
+class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
+  val objectInputStream = for {
+    elp <- eventLogPath orElse { Option(System.getProperty("spark.logging.eventLog")) }
+    file = new File(elp)
+    if file.exists
+  } yield new EventLogInputStream(new FileInputStream(file), sc)
   val events = new ArrayBuffer[EventLogEntry]
   loadNewEvents()
 
@@ -67,17 +58,19 @@ class EventLogReader(sc: SparkContext) {
       getOrElse { "" })
 
   def loadNewEvents() {
-    try {
-      while (true) {
-        val event = ois.readObject.asInstanceOf[EventLogEntry]
-        events += event
-        event match {
-          case RDDCreation(rdd, location) => sc.updateRddId(rdd.id)
-          case _ => {}
+    for (ois <- objectInputStream) {
+      try {
+        while (true) {
+          val event = ois.readObject.asInstanceOf[EventLogEntry]
+          events += event
+          event match {
+            case RDDCreation(rdd, location) => sc.updateRddId(rdd.id)
+            case _ => {}
+          }
         }
+      } catch {
+        case e: EOFException => {}
       }
-    } catch {
-      case e: EOFException => {}
     }
   }
 }
