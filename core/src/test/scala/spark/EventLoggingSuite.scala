@@ -20,7 +20,8 @@ class EventLoggingSuite extends FunSuite {
 
     // Make an RDD
     val sc = new SparkContext("local", "test")
-    SparkEnv.get.eventReporter.eventLogWriter = Some(new EventLogWriter(Some(eventLog.getAbsolutePath)))
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
     val nums = sc.makeRDD(1 to 4)
     sc.stop()
 
@@ -39,7 +40,8 @@ class EventLoggingSuite extends FunSuite {
 
     // Make an RDD
     val sc = new SparkContext("local", "test")
-    SparkEnv.get.eventReporter.eventLogWriter = Some(new EventLogWriter(Some(eventLog.getAbsolutePath)))
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
     val nums = sc.makeRDD(1 to 4)
 
     // Read the RDD back from the event log
@@ -69,7 +71,8 @@ class EventLoggingSuite extends FunSuite {
 
     // Make some RDDs
     val sc = new SparkContext("local", "test")
-    SparkEnv.get.eventReporter.eventLogWriter = Some(new EventLogWriter(Some(eventLog.getAbsolutePath)))
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
     val nums = sc.makeRDD(1 to 4)
     val numsMapped = nums.map(x => x + 1)
     sc.stop()
@@ -83,6 +86,33 @@ class EventLoggingSuite extends FunSuite {
     val nums2 = sc2.makeRDD(1 to 5)
     assert(nums2.id != r.rdds(0).id)
     assert(nums2.id != r.rdds(1).id)
+    sc2.stop()
+  }
+
+  test("checksum verification") {
+    // Initialize event log
+    val tempDir = Files.createTempDir()
+    val eventLog = new File(tempDir, "eventLog")
+
+    // Make some RDDs
+    val sc = new SparkContext("local", "test")
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
+    val nums = sc.makeRDD(1 to 4)
+    val numsNondeterministic = nums.map(x => Math.random)
+    val collected = numsNondeterministic.collect
+    sc.stop()
+
+    // Read them back from the event log and check for checksum mismatches
+    val sc2 = new SparkContext("local", "test2")
+    val r = new EventLogReader(sc2, Some(eventLog.getAbsolutePath))
+    assert(r.rdds.length === 2)
+    assert(r.rdds(0).collect.toList === (1 to 4).toList)
+    assert(r.rdds(1).collect.toList != collected.toList)
+    assert(r.checksumMismatches.find {
+      case (RDDChecksum(rddId, _, _), _) if rddId == numsNondeterministic.id => true
+      case _ => false
+    }.nonEmpty)
     sc2.stop()
   }
 }

@@ -9,6 +9,7 @@ import java.io._
 sealed trait EventReporterMessage
 case class ReportException(exception: Throwable) extends EventReporterMessage
 case class ReportRDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventReporterMessage
+case class StopEventReporter extends EventReporterMessage
 
 class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLogWriter) extends Actor with Logging {
   self.dispatcher = dispatcher
@@ -18,12 +19,14 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
       eventLogWriter.log(ExceptionEvent(exception))
     case ReportRDDChecksum(rddId, splitIndex, checksum) =>
       eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
+    case StopEventReporter =>
+      eventLogWriter.stop()
   }
 }
 
 class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Logging {
   val host = System.getProperty("spark.master.host")
-  private[spark] var eventLogWriter = if (isMaster) Some(new EventLogWriter) else None
+  var eventLogWriter: Option[EventLogWriter] = if (isMaster) Some(new EventLogWriter) else None
 
   // Remote reference to the actor on workers
   var reporterActor: ActorRef = {
@@ -52,7 +55,8 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
   }
 
   def stop() {
-    for (elw <- eventLogWriter)
-      elw.stop()
+    reporterActor ! StopEventReporter
+    eventLogWriter = None
+    reporterActor = null
   }
 }

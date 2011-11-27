@@ -8,18 +8,37 @@ case class ExceptionEvent(exception: Throwable) extends EventLogEntry
 case class RDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) extends EventLogEntry
 case class RDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventLogEntry
 
-class EventLogWriter(eventLogPath: Option[String] = None) extends Logging {
-  val eventLog = for {
-    elp <- eventLogPath orElse { Option(System.getProperty("spark.logging.eventLog")) }
-    file = new File(elp)
-    if !file.exists
-  } yield new EventLogOutputStream(new FileOutputStream(file))
+class EventLogWriter extends Logging {
+  private var eventLog: Option[EventLogOutputStream] = None
+  setEventLogPath(Option(System.getProperty("spark.logging.eventLog")))
+  private var eventLogReader: Option[EventLogReader] = None
+
+  def enableChecksumVerification(eventLogReader: EventLogReader) {
+    this.eventLogReader = Some(eventLogReader)
+  }
+
+  def setEventLogPath(eventLogPath: Option[String]) {
+    eventLog =
+      for {
+        elp <- eventLogPath
+        file = new File(elp)
+        if !file.exists
+      } yield new EventLogOutputStream(new FileOutputStream(file))
+  }
 
   def log(entry: EventLogEntry) {
+    // Log the entry
     for (l <- eventLog) {
       l.writeObject(entry)
       l.flush()
     }
+    // Do checksum verification if enabled
+    for {
+      r <- eventLogReader
+      RDDChecksum(rddId, splitIndex, checksum) <- Some(entry)
+      recordedChecksum <- r.checksumFor(rddId, splitIndex)
+      if checksum != recordedChecksum.checksum
+    } r.reportChecksumMismatch(recordedChecksum, RDDChecksum(rddId, splitIndex, checksum))
   }
 
   def stop() {
@@ -43,6 +62,12 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
   } yield new EventLogInputStream(new FileInputStream(file), sc)
   val events = new ArrayBuffer[EventLogEntry]
   loadNewEvents()
+
+  // Enable checksum verification of loaded RDDs as they are computed
+  for (w <- sc.env.eventReporter.eventLogWriter)
+    w.enableChecksumVerification(this)
+
+  val checksumMismatches = new ArrayBuffer[(RDDChecksum, RDDChecksum)]
 
   def rdds = for (RDDCreation(rdd, location) <- events) yield rdd
 
@@ -72,5 +97,13 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
         case e: EOFException => {}
       }
     }
+  }
+
+  def checksumFor(rddId: Int, splitIndex: Int): Option[RDDChecksum] = events.collectFirst {
+    case c: RDDChecksum if c.rddId == rddId && c.splitIndex == splitIndex => c
+  }
+
+  def reportChecksumMismatch(recordedChecksum: RDDChecksum, newChecksum: RDDChecksum) {
+    checksumMismatches.append((recordedChecksum, newChecksum))
   }
 }
