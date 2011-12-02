@@ -1,8 +1,11 @@
 package spark
 
+import scala.util.MurmurHash
+
 class ChecksummingIterator[T](rdd: RDD[T], split: Split, underlying: Iterator[T]) extends Iterator[T] {
+  // Use a constant seed so the checksum is reproducible
+  val runningChecksum = new MurmurHash[T](0)
   var alreadyReportedChecksum = false
-  var runningChecksum = 0
 
   def hasNext = {
     val result = underlying.hasNext
@@ -17,14 +20,13 @@ class ChecksummingIterator[T](rdd: RDD[T], split: Split, underlying: Iterator[T]
   }
 
   def updateChecksum(nextVal: T) {
-    // TODO: use a real hash function
-    runningChecksum ^= nextVal.hashCode
+    runningChecksum(nextVal)
     reportChecksum(underlying.hasNext)
   }
 
   def reportChecksum(hasNext: Boolean) {
     if (!hasNext && !alreadyReportedChecksum) {
-      SparkEnv.get.eventReporter.reportRDDChecksum(rdd, split, runningChecksum)
+      SparkEnv.get.eventReporter.reportRDDChecksum(rdd, split, runningChecksum.hash)
       alreadyReportedChecksum = true
     }
   }
