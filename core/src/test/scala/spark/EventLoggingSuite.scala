@@ -94,7 +94,7 @@ class EventLoggingSuite extends FunSuite {
     val tempDir = Files.createTempDir()
     val eventLog = new File(tempDir, "eventLog")
 
-    // Make some RDDs
+    // Make some RDDs that use Math.random
     val sc = new SparkContext("local", "test")
     for (w <- SparkEnv.get.eventReporter.eventLogWriter)
       w.setEventLogPath(Some(eventLog.getAbsolutePath))
@@ -103,16 +103,19 @@ class EventLoggingSuite extends FunSuite {
     val collected = numsNondeterministic.collect
     sc.stop()
 
-    // Read them back from the event log and check for checksum mismatches
+    // Read them back from the event log
     val sc2 = new SparkContext("local", "test2")
     val r = new EventLogReader(sc2, Some(eventLog.getAbsolutePath))
     assert(r.rdds.length === 2)
     assert(r.rdds(0).collect.toList === (1 to 4).toList)
     assert(r.rdds(1).collect.toList != collected.toList)
+    // Ensure that all checksums have gone through
+    sc2.stop()
+
+    // Make sure we found a checksum mismatch
     assert(r.checksumMismatches.find {
       case (RDDChecksum(rddId, _, _), _) if rddId == numsNondeterministic.id => true
       case _ => false
     }.nonEmpty)
-    sc2.stop()
   }
 }

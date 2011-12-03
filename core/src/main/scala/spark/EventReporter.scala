@@ -21,6 +21,7 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
       eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
     case StopEventReporter =>
       eventLogWriter.stop()
+      self.reply('OK)
   }
 }
 
@@ -55,7 +56,7 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
   }
 
   def stop() {
-    reporterActor ! StopEventReporter
+    reporterActor !! StopEventReporter
     eventLogWriter = None
     reporterActor = null
   }
