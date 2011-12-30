@@ -118,4 +118,30 @@ class EventLoggingSuite extends FunSuite {
       case _ => false
     }.nonEmpty)
   }
+
+  test("runtime statistics logging") {
+    // Initialize event log
+    val tempDir = Files.createTempDir()
+    val eventLog = new File(tempDir, "eventLog")
+
+    // Make an RDD that takes a long time to compute each element
+    val sc = new SparkContext("local", "test")
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
+    val nums = sc.makeRDD(List(1, 2, 3))
+    val slow = nums.map { x => Thread.sleep(1000); x }
+    val slowList = slow.collect.toList
+    sc.stop()
+
+    // Verify that the runtime statistics make sense
+    val sc2 = new SparkContext("local", "test2")
+    val r = new EventLogReader(sc2, Some(eventLog.getAbsolutePath))
+    val stats = r.events.collect {
+      case RuntimeStatistics(rddId, _, mean, _) if rddId == slow.id =>
+        mean
+    }.toList
+    assert(stats.length == 1)
+    assert(stats.head >= 1000)
+    sc2.stop()
+  }
 }

@@ -9,6 +9,12 @@ import java.io._
 sealed trait EventReporterMessage
 case class ReportException(exception: Throwable) extends EventReporterMessage
 case class ReportRDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventReporterMessage
+case class ReportRuntimeStatistics(
+  rddId: Int,
+  splitIndex: Int,
+  mean: Double,
+  stdDev: Double
+) extends EventReporterMessage
 case class StopEventReporter extends EventReporterMessage
 
 class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLogWriter) extends Actor with Logging {
@@ -19,6 +25,8 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
       eventLogWriter.log(ExceptionEvent(exception))
     case ReportRDDChecksum(rddId, splitIndex, checksum) =>
       eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
+    case ReportRuntimeStatistics(rddId, splitIndex, mean, stdDev) =>
+      eventLogWriter.log(RuntimeStatistics(rddId, splitIndex, mean, stdDev))
     case StopEventReporter =>
       eventLogWriter.stop()
       self.reply('OK)
@@ -53,6 +61,10 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
 
   def reportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) {
     reporterActor ! ReportRDDChecksum(rdd.id, split.index, checksum)
+  }
+
+  def reportRuntimeStatistics(rdd: RDD[_], split: Split, mean: Double, stdDev: Double) {
+    reporterActor ! ReportRuntimeStatistics(rdd.id, split.index, mean, stdDev)
   }
 
   def stop() {
