@@ -61,11 +61,11 @@ class Executor extends org.apache.mesos.Executor with Logging {
                          .setTaskId(desc.getTaskId)
                          .setState(TaskState.TASK_RUNNING)
                          .build())
+      val task = Utils.deserialize[Task[Any]](desc.getData.toByteArray, classLoader)
       try {
         SparkEnv.set(env)
         Thread.currentThread.setContextClassLoader(classLoader)
         Accumulators.clear
-        val task = Utils.deserialize[Task[Any]](desc.getData.toByteArray, classLoader)
         for (gen <- task.generation) // Update generation if any is set
           env.mapOutputTracker.updateGeneration(gen)
         val value = task.run(tid.toInt)
@@ -93,7 +93,7 @@ class Executor extends org.apache.mesos.Executor with Logging {
                              .setState(TaskState.TASK_FAILED)
                              .setData(ByteString.copyFrom(Utils.serialize(reason)))
                              .build())
-          env.eventReporter.reportException(t)
+          env.eventReporter.reportException(t, task)
 
           // TODO: Handle errors in tasks less dramatically
           logError("Exception in task ID " + tid, t)

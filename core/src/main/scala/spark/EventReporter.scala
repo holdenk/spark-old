@@ -7,7 +7,7 @@ import akka.dispatch.MessageDispatcher
 import java.io._
 
 sealed trait EventReporterMessage
-case class ReportException(exception: Throwable) extends EventReporterMessage
+case class ReportException(exception: Throwable, task: Task[_]) extends EventReporterMessage
 case class ReportRDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventReporterMessage
 case class ReportRuntimeStatistics(
   rddId: Int,
@@ -22,8 +22,8 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
   self.dispatcher = dispatcher
 
   def receive = {
-    case ReportException(exception) =>
-      eventLogWriter.log(ExceptionEvent(exception))
+    case ReportException(exception, task) =>
+      eventLogWriter.log(ExceptionEvent(exception, task))
     case ReportRDDChecksum(rddId, splitIndex, checksum) =>
       eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
     case ReportRuntimeStatistics(rddId, splitIndex, mean, stdDev) =>
@@ -50,8 +50,12 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
     remote.actorFor("EventReporter", host, port)
   }
 
-  def reportException(exception: Throwable) {
-    reporterActor ! ReportException(exception)
+  def reportException(exception: Throwable, task: Task[_]) {
+    // TODO: The task may refer to an RDD, so sending it through the
+    // actor will interfere with RDD back-referencing, causing a
+    // duplicate version of the referenced RDD to be serialized. If
+    // tasks had IDs, we could just send those, but they don't.
+    reporterActor ! ReportException(exception, task)
   }
 
   def reportRDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) {

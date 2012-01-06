@@ -4,7 +4,7 @@ import java.io._
 import scala.collection.mutable.ArrayBuffer
 
 sealed trait EventLogEntry
-case class ExceptionEvent(exception: Throwable) extends EventLogEntry
+case class ExceptionEvent(exception: Throwable, task: Task[_]) extends EventLogEntry
 case class RDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) extends EventLogEntry
 case class RDDChecksum(rddId: Int, splitIndex: Int, checksum: Int) extends EventLogEntry
 case class RuntimeStatistics(
@@ -84,6 +84,11 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
     for (RDDCreation(rdd, location) <- events) {
       println("#%02d: %-20s %s".format(rdd.id, rdd.getClass.getName.replaceFirst("""^spark\.""", ""), firstExternalElement(location)))
     }
+  }
+
+  def debugException(event: ExceptionEvent) {
+    val scheduler = new LocalScheduler(1)
+    scheduler.submitTasks(List(event.task))
   }
 
   def firstExternalElement(location: Array[StackTraceElement]) =
