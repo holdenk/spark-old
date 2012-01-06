@@ -15,6 +15,7 @@ case class ReportRuntimeStatistics(
   mean: Double,
   stdDev: Double
 ) extends EventReporterMessage
+case class ReportSerializationTime(time: Long) extends EventReporterMessage
 case class StopEventReporter extends EventReporterMessage
 
 class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLogWriter) extends Actor with Logging {
@@ -27,6 +28,8 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
       eventLogWriter.log(RDDChecksum(rddId, splitIndex, checksum))
     case ReportRuntimeStatistics(rddId, splitIndex, mean, stdDev) =>
       eventLogWriter.log(RuntimeStatistics(rddId, splitIndex, mean, stdDev))
+    case ReportSerializationTime(time) =>
+      eventLogWriter.log(SerializationTime(time))
     case StopEventReporter =>
       eventLogWriter.stop()
       self.reply('OK)
@@ -65,6 +68,10 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
 
   def reportRuntimeStatistics(rdd: RDD[_], split: Split, mean: Double, stdDev: Double) {
     reporterActor ! ReportRuntimeStatistics(rdd.id, split.index, mean, stdDev)
+  }
+
+  def reportSerialization(time: Long) {
+    reporterActor ! ReportSerializationTime(time)
   }
 
   def stop() {

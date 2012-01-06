@@ -118,11 +118,11 @@ class WPRSerializer extends spark.Serializer {
 }
 
 class WPRSerializerInstance extends SerializerInstance {
-  def serialize[T](t: T): Array[Byte] = {
+  def serializeImpl[T](t: T): Array[Byte] = {
     throw new UnsupportedOperationException()
   }
 
-  def deserialize[T](bytes: Array[Byte]): T = {
+  def deserializeImpl[T](bytes: Array[Byte]): T = {
     throw new UnsupportedOperationException()
   }
 
@@ -138,7 +138,7 @@ class WPRSerializerInstance extends SerializerInstance {
 class WPRSerializationStream(os: OutputStream) extends SerializationStream {
   val dos = new DataOutputStream(os)
 
-  def writeObject[T](t: T): Unit = t match {
+  def writeObjectImpl[T](t: T): Unit = t match {
     case (id: String, wrapper: ArrayBuffer[_]) => wrapper(0) match {
       case links: Array[String] => {
         dos.writeInt(0) // links
@@ -162,13 +162,13 @@ class WPRSerializationStream(os: OutputStream) extends SerializationStream {
   }
 
   def flush() { dos.flush() }
-  def close() { dos.close() }
+  def closeImpl() { dos.close() }
 }
 
 class WPRDeserializationStream(is: InputStream) extends DeserializationStream {
   val dis = new DataInputStream(is)
 
-  def readObject[T](): T = {
+  def readObjectImpl[T](): T = {
     val typeId = dis.readInt()
     typeId match {
       case 0 => {
@@ -194,5 +194,5 @@ class WPRDeserializationStream(is: InputStream) extends DeserializationStream {
     }
   }
 
-  def close() { dis.close() }
+  def closeImpl() { dis.close() }
 }

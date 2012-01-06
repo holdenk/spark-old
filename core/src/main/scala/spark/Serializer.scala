@@ -15,8 +15,25 @@ trait Serializer {
  * An instance of the serializer, for use by one thread at a time.
  */
 trait SerializerInstance {
-  def serialize[T](t: T): Array[Byte]
-  def deserialize[T](bytes: Array[Byte]): T
+  def serialize[T](t: T): Array[Byte] = {
+    val start = System.currentTimeMillis
+    val result = serializeImpl(t)
+    val end = System.currentTimeMillis
+    SparkEnv.get.eventReporter.reportSerialization(end - start)
+    result
+  }
+
+  def deserialize[T](bytes: Array[Byte]): T = {
+    val start = System.currentTimeMillis
+    val result = deserializeImpl(bytes)
+    val end = System.currentTimeMillis
+    SparkEnv.get.eventReporter.reportSerialization(end - start)
+    result
+  }
+
+  protected def serializeImpl[T](t: T): Array[Byte]
+  protected def deserializeImpl[T](bytes: Array[Byte]): T
+
   def outputStream(s: OutputStream): SerializationStream
   def inputStream(s: InputStream): DeserializationStream
 }
@@ -25,15 +42,44 @@ trait SerializerInstance {
  * A stream for writing serialized objects.
  */
 trait SerializationStream {
-  def writeObject[T](t: T): Unit
+  var totalSerializationTime = 0L
+
+  def writeObject[T](t: T) {
+    val start = System.currentTimeMillis
+    writeObjectImpl(t)
+    val end = System.currentTimeMillis
+    totalSerializationTime += end - start
+  }
+
+  def close() {
+    SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
+    closeImpl()
+  }
+
+  def writeObjectImpl[T](t: T): Unit
   def flush(): Unit
-  def close(): Unit
+  def closeImpl(): Unit
 }
 
 /**
  * A stream for reading serialized objects.
  */
 trait DeserializationStream {
-  def readObject[T](): T
-  def close(): Unit
+  var totalSerializationTime = 0L
+
+  def readObject[T](): T = {
+    val start = System.currentTimeMillis
+    val result = readObjectImpl[T]()
+    val end = System.currentTimeMillis
+    totalSerializationTime += end - start
+    result
+  }
+
+  def close() {
+    SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
+    closeImpl()
+  }
+
+  def readObjectImpl[T](): T
+  def closeImpl(): Unit
 }

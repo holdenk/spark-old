@@ -13,6 +13,7 @@ case class RuntimeStatistics(
   mean: Double,
   stdDev: Double
 ) extends EventLogEntry
+case class SerializationTime(time: Long) extends EventLogEntry
 
 class EventLogWriter extends Logging {
   private var eventLog: Option[EventLogOutputStream] = None
@@ -76,6 +77,8 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
   val checksumMismatches = new ArrayBuffer[(RDDChecksum, RDDChecksum)]
 
   def rdds = for (RDDCreation(rdd, location) <- events) yield rdd
+
+  def serializationTime = (for (SerializationTime(time) <- events) yield time).sum
 
   def printRDDs() {
     for (RDDCreation(rdd, location) <- events) {

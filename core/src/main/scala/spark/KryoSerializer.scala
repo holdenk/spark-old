@@ -65,7 +65,7 @@ object ZigZag {
 
 class KryoSerializationStream(kryo: Kryo, buf: ByteBuffer, out: OutputStream)
 extends SerializationStream {
-  def writeObject[T](t: T) {
+  def writeObjectImpl[T](t: T) {
     kryo.writeClassAndObject(buf, t)
     ZigZag.writeInt(buf.position(), out)
     buf.flip()
@@ -74,27 +74,27 @@ extends SerializationStream {
   }
 
   def flush() { out.flush() }
-  def close() { out.close() }
+  def closeImpl() { out.close() }
 }
 
 class KryoDeserializationStream(buf: ObjectBuffer, in: InputStream)
 extends DeserializationStream {
-  def readObject[T](): T = {
+  def readObjectImpl[T](): T = {
     val len = ZigZag.readInt(in)
     buf.readClassAndObject(in, len).asInstanceOf[T]
   }
 
-  def close() { in.close() }
+  def closeImpl() { in.close() }
 }
 
 class KryoSerializerInstance(ks: KryoSerializer) extends SerializerInstance {
   val buf = ks.threadBuf.get()
 
-  def serialize[T](t: T): Array[Byte] = {
+  def serializeImpl[T](t: T): Array[Byte] = {
     buf.writeClassAndObject(t)
   }
 
-  def deserialize[T](bytes: Array[Byte]): T = {
+  def deserializeImpl[T](bytes: Array[Byte]): T = {
     buf.readClassAndObject(bytes).asInstanceOf[T]
   }
 
