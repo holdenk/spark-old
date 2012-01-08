@@ -82,13 +82,48 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
 
   def printRDDs() {
     for (RDDCreation(rdd, location) <- events) {
-      println("#%02d: %-20s %s".format(rdd.id, rdd.getClass.getName.replaceFirst("""^spark\.""", ""), firstExternalElement(location)))
+      println("#%02d: %-20s %s".format(rdd.id, rddType(rdd), firstExternalElement(location)))
     }
   }
 
+  def printProcessingTime() {
+    def mean(xs: Seq[Double]) = xs.sum / xs.length
+    println("RDD\tAverage processing time per element (ms)")
+    println("---\t----------------------------------------")
+    (events.collect { case rs: RuntimeStatistics => rs }
+     .groupBy(_.rddId)
+     .mapValues(xs => mean(xs.map(_.mean)))
+     .toList.sortBy(_._2).reverse
+     .foreach(x => println("#" + x._1 + "\t" + x._2)))
+  }
+
+  private def rddType(rdd: RDD[_]): String =
+    rdd.getClass.getName.replaceFirst("""^spark\.""", "")
+
+  def visualizeRDDs() {
+    val file = File.createTempFile("spark-rdds-", "")
+    val dot = new java.io.PrintWriter(file)
+    dot.println("digraph {")
+    for (RDDCreation(rdd, location) <- events) {
+      dot.println("  %d [label=\"%d %s\"]".format(rdd.id, rdd.id, rddType(rdd)))
+      for (dep <- rdd.dependencies)
+        dot.println("  %d -> %d;".format(rdd.id, dep.rdd.id))
+    }
+    dot.println("}")
+    dot.close()
+    Runtime.getRuntime.exec("dot -Grankdir=BT -Tpdf " + file + " -o " + file + ".pdf")
+    println(file + ".pdf")
+  }
+
   def debugException(event: ExceptionEvent) {
-    val scheduler = new LocalScheduler(1)
-    scheduler.submitTasks(List(event.task))
+    println("Running task " + event.task)
+    try {
+      val result: Any = event.task.run(0)
+    } catch {
+      case ex =>
+        println(ex)
+    }
+    println("Finished running task " + event.task)
   }
 
   def firstExternalElement(location: Array[StackTraceElement]) =
