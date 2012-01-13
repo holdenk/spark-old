@@ -25,8 +25,8 @@ import org.apache.hadoop.mapred.TextInputFormat
 import spark.broadcast._
 
 class SparkContext(
-  master: String,
-  frameworkName: String,
+  private[spark] val master: String,
+  private[spark] val frameworkName: String,
   val sparkHome: String = null,
   val jars: Seq[String] = Nil)
 extends Logging {

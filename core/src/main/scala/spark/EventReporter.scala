@@ -58,6 +58,11 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
     reporterActor ! ReportException(exception, task)
   }
 
+  def reportLocalException(exception: Throwable, task: Task[_]) {
+    for (elw <- eventLogWriter)
+      elw.log(ExceptionEvent(exception, task))
+  }
+
   def reportRDDCreation(rdd: RDD[_], location: Array[StackTraceElement]) {
     // Bypass the actor for this to avoid serializing the RDD, which
     // would interfere with the automatic back-referencing done during

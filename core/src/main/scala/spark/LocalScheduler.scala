@@ -42,6 +42,7 @@ private class LocalScheduler(threads: Int) extends DAGScheduler with Logging {
             case t: Throwable => {
               // TODO: Do something nicer here
               logError("Exception in task " + i, t)
+              env.eventReporter.reportLocalException(t, tasks(i))
               System.exit(1)
               null
             }

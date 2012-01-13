@@ -1,6 +1,7 @@
 package spark
 
 import java.io._
+import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
 
 sealed trait EventLogEntry
@@ -115,15 +116,40 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
     println(file + ".pdf")
   }
 
-  def debugException(event: ExceptionEvent) {
-    println("Running task " + event.task)
-    try {
-      val result: Any = event.task.run(0)
+  def debugException(event: ExceptionEvent, debugOpts: String = "-Xdebug -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000") {
+    for {elp <- eventLogPath orElse { Option(System.getProperty("spark.logging.eventLog")) }
+         sparkHome <- Option(sc.sparkHome) orElse { Option("") }}
+      try {
+        println("Running task " + event.task)
+        val eventIndex = events.indexOf(event).toString
+
+        // Launch the task in a separate JVM with debug options set
+        val pb = new ProcessBuilder(List(
+          "./run", "spark.DebuggingTaskRunner", elp, eventIndex, sc.master,
+          sc.frameworkName, sparkHome) ::: sc.jars.toList)
+        val env = pb.environment
+        env.put("SPARK_DEBUG_OPTS", debugOpts)
+        pb.redirectErrorStream(true)
+        val proc = pb.start()
+
+        // Pipe the task's stdout and stderr to our own
+        new Thread {
+          override def run {
+            var byte: Int = -1
+            val procStdout = proc.getInputStream
+            byte = procStdout.read()
+            while (byte != -1) {
+              System.out.write(byte)
+              byte = procStdout.read()
+            }
+          }
+        }.start()
+        proc.waitFor()
+        println("Finished running task " + event.task)
     } catch {
       case ex =>
-        println(ex)
+        println("Failed to run task %s: %s".format(event.task, ex))
     }
-    println("Finished running task " + event.task)
   }
 
   def firstExternalElement(location: Array[StackTraceElement]) =
