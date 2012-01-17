@@ -127,17 +127,15 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
         val pb = new ProcessBuilder(List(
           "./run", "spark.DebuggingTaskRunner", elp, eventIndex, sc.master,
           sc.frameworkName, sparkHome) ::: sc.jars.toList)
-        val env = pb.environment
-        env.put("SPARK_DEBUG_OPTS", debugOpts)
+        pb.environment.put("SPARK_DEBUG_OPTS", debugOpts)
         pb.redirectErrorStream(true)
         val proc = pb.start()
 
         // Pipe the task's stdout and stderr to our own
         new Thread {
           override def run {
-            var byte: Int = -1
             val procStdout = proc.getInputStream
-            byte = procStdout.read()
+            var byte: Int = procStdout.read()
             while (byte != -1) {
               System.out.write(byte)
               byte = procStdout.read()

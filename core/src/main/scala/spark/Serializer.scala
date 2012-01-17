@@ -15,21 +15,27 @@ trait Serializer {
  * An instance of the serializer, for use by one thread at a time.
  */
 trait SerializerInstance {
-  def serialize[T](t: T): Array[Byte] = {
-    val start = System.currentTimeMillis
-    val result = serializeImpl(t)
-    val end = System.currentTimeMillis
-    SparkEnv.get.eventReporter.reportSerialization(end - start)
-    result
-  }
+  def serialize[T](t: T): Array[Byte] =
+    if (SparkEnv.get.eventReporter.measurePerformance) {
+      val start = System.currentTimeMillis
+      val result = serializeImpl(t)
+      val end = System.currentTimeMillis
+      SparkEnv.get.eventReporter.reportSerialization(end - start)
+      result
+    } else {
+      serializeImpl(t)
+    }
 
-  def deserialize[T](bytes: Array[Byte]): T = {
-    val start = System.currentTimeMillis
-    val result = deserializeImpl(bytes)
-    val end = System.currentTimeMillis
-    SparkEnv.get.eventReporter.reportSerialization(end - start)
-    result
-  }
+  def deserialize[T](bytes: Array[Byte]): T =
+    if (SparkEnv.get.eventReporter.measurePerformance) {
+      val start = System.currentTimeMillis
+      val result = deserializeImpl(bytes)
+      val end = System.currentTimeMillis
+      SparkEnv.get.eventReporter.reportSerialization(end - start)
+      result
+    } else {
+      deserializeImpl(bytes)
+    }
 
   protected def serializeImpl[T](t: T): Array[Byte]
   protected def deserializeImpl[T](bytes: Array[Byte]): T
@@ -45,14 +51,19 @@ trait SerializationStream {
   var totalSerializationTime = 0L
 
   def writeObject[T](t: T) {
-    val start = System.currentTimeMillis
-    writeObjectImpl(t)
-    val end = System.currentTimeMillis
-    totalSerializationTime += end - start
+    if (SparkEnv.get.eventReporter.measurePerformance) {
+      val start = System.currentTimeMillis
+      writeObjectImpl(t)
+      val end = System.currentTimeMillis
+      totalSerializationTime += end - start
+    } else {
+      writeObjectImpl(t)
+    }
   }
 
   def close() {
-    SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
+    if (SparkEnv.get.eventReporter.measurePerformance)
+      SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
     closeImpl()
   }
 
@@ -67,16 +78,20 @@ trait SerializationStream {
 trait DeserializationStream {
   var totalSerializationTime = 0L
 
-  def readObject[T](): T = {
-    val start = System.currentTimeMillis
-    val result = readObjectImpl[T]()
-    val end = System.currentTimeMillis
-    totalSerializationTime += end - start
-    result
-  }
+  def readObject[T](): T =
+    if (SparkEnv.get.eventReporter.measurePerformance) {
+      val start = System.currentTimeMillis
+      val result = readObjectImpl[T]()
+      val end = System.currentTimeMillis
+      totalSerializationTime += end - start
+      result
+    } else {
+      readObjectImpl[T]()
+    }
 
   def close() {
-    SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
+    if (SparkEnv.get.eventReporter.measurePerformance)
+      SparkEnv.get.eventReporter.reportSerialization(totalSerializationTime)
     closeImpl()
   }
 

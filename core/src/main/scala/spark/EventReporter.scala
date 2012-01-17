@@ -39,6 +39,8 @@ class EventReporterActor(dispatcher: MessageDispatcher, eventLogWriter: EventLog
 class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Logging {
   val host = System.getProperty("spark.master.host")
   var eventLogWriter: Option[EventLogWriter] = if (isMaster) Some(new EventLogWriter) else None
+  val measurePerformance =
+    System.getProperty("spark.logging.measurePerformance", "false").toBoolean
 
   // Remote reference to the actor on workers
   var reporterActor: ActorRef = {

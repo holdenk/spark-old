@@ -16,6 +16,8 @@ class ChecksummingIterator[T](rdd: RDD[T], split: Split, underlying: Iterator[T]
 
   var alreadySentReport = false
 
+  val measurePerformance = SparkEnv.get.eventReporter.measurePerformance
+
   def hasNext = {
     val doesHaveNext = underlying.hasNext
     if (!doesHaveNext && !alreadySentReport) {
@@ -26,14 +28,19 @@ class ChecksummingIterator[T](rdd: RDD[T], split: Split, underlying: Iterator[T]
     doesHaveNext
   }
 
-  def next(): T = {
-    val start = System.currentTimeMillis
-    val result = underlying.next
-    val end = System.currentTimeMillis
-    updateChecksum(result)
-    updateStatistics(end - start)
-    result
-  }
+  def next(): T =
+    if (measurePerformance) {
+      val start = System.currentTimeMillis
+      val result = underlying.next
+      val end = System.currentTimeMillis
+      updateChecksum(result)
+      updateStatistics(end - start)
+      result
+    } else {
+      val result = underlying.next
+      updateChecksum(result)
+      result
+    }
 
   def updateChecksum(nextVal: T) {
     runningChecksum(nextVal)
@@ -63,8 +70,10 @@ class ChecksummingIterator[T](rdd: RDD[T], split: Split, underlying: Iterator[T]
   }
 
   def reportStatistics() {
-    val mean = if (n > 0) newM else 0.0
-    val stdDev = Math.sqrt(if (n > 1) newS / (n - 1) else 0.0)
-    SparkEnv.get.eventReporter.reportRuntimeStatistics(rdd, split, mean, stdDev)
+    if (measurePerformance) {
+      val mean = if (n > 0) newM else 0.0
+      val stdDev = Math.sqrt(if (n > 1) newS / (n - 1) else 0.0)
+      SparkEnv.get.eventReporter.reportRuntimeStatistics(rdd, split, mean, stdDev)
+    }
   }
 }
