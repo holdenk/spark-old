@@ -15,6 +15,7 @@ case class RuntimeStatistics(
   stdDev: Double
 ) extends EventLogEntry
 case class SerializationTime(time: Long) extends EventLogEntry
+case class TaskSubmission(tasks: Seq[Task[_]]) extends EventLogEntry
 
 class EventLogWriter extends Logging {
   private var eventLog: Option[EventLogOutputStream] = None

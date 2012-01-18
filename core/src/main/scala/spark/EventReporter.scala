@@ -73,6 +73,12 @@ class EventReporter(isMaster: Boolean, dispatcher: MessageDispatcher) extends Lo
       elw.log(RDDCreation(rdd, location))
   }
 
+  def reportTaskSubmission(tasks: Seq[Task[_]]) {
+    // Again bypass the actor, because Task[_] may refer to RDDs
+    for (elw <- eventLogWriter)
+      elw.log(TaskSubmission(tasks))
+  }
+
   def reportRDDChecksum(rdd: RDD[_], split: Split, checksum: Int) {
     reporterActor ! ReportRDDChecksum(rdd.id, split.index, checksum)
   }

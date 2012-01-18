@@ -120,6 +120,8 @@ class EventLoggingSuite extends FunSuite {
   }
 
   test("runtime statistics logging") {
+    System.setProperty("spark.logging.measurePerformance", "true")
+
     // Initialize event log
     val tempDir = Files.createTempDir()
     val eventLog = new File(tempDir, "eventLog")
@@ -140,8 +142,33 @@ class EventLoggingSuite extends FunSuite {
       case RuntimeStatistics(rddId, _, mean, _) if rddId == slow.id =>
         mean
     }.toList
+    println(stats.length)
     assert(stats.length == 1)
     assert(stats.head >= 1000)
+    sc2.stop()
+
+    System.clearProperty("spark.logging.measurePerformance")
+  }
+
+  test("task submission logging") {
+    // Initialize event log
+    val tempDir = Files.createTempDir()
+    val eventLog = new File(tempDir, "eventLog")
+
+    // Make an RDD and do some computation to run tasks
+    val sc = new SparkContext("local", "test")
+    for (w <- SparkEnv.get.eventReporter.eventLogWriter)
+      w.setEventLogPath(Some(eventLog.getAbsolutePath))
+    val nums = sc.makeRDD(List(1, 2, 3))
+    val nums2 = nums.map(_ * 2)
+    val nums2List = nums2.collect.toList
+    sc.stop()
+
+    // Verify that tasks were logged
+    val sc2 = new SparkContext("local", "test2")
+    val r = new EventLogReader(sc2, Some(eventLog.getAbsolutePath))
+    val tasks = r.events.collect { case t: TaskSubmission => t }
+    assert(tasks.nonEmpty)
     sc2.stop()
   }
 }
