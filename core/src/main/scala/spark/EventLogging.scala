@@ -88,6 +88,34 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
     }
   }
 
+  def tasks: Seq[Task[_]] =
+    for {
+      TaskSubmission(tasks) <- events
+      task <- tasks
+    } yield task
+
+  def tasksForRDD(rdd: RDD[_]): Seq[Task[_]] =
+    for {
+      task <- tasks
+      taskRDD <- task match {
+        case rt: ResultTask[_, _] => Some(rt.rdd)
+        case smt: ShuffleMapTask => Some(smt.rdd)
+        case _ => None
+      }
+      if taskRDD.id == rdd.id
+    } yield task
+
+  def taskWithId(stageId: Int, partition: Int): Option[Task[_]] =
+    (for {
+      task <- tasks
+      (taskStageId, taskPartition) <- task match {
+        case rt: ResultTask[_, _] => Some((rt.stageId, rt.partition))
+        case smt: ShuffleMapTask => Some((smt.stageId, smt.partition))
+        case _ => None
+      }
+      if taskStageId == stageId && taskPartition == partition
+    } yield task).headOption
+
   def printProcessingTime() {
     def mean(xs: Seq[Double]) = xs.sum / xs.length
     println("RDD\tAverage processing time per element (ms)")
@@ -117,37 +145,58 @@ class EventLogReader(sc: SparkContext, eventLogPath: Option[String] = None) {
     println(file + ".pdf")
   }
 
-  def debugException(event: ExceptionEvent, debugOpts: String = "-Xdebug -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000") {
-    for {elp <- eventLogPath orElse { Option(System.getProperty("spark.logging.eventLog")) }
-         sparkHome <- Option(sc.sparkHome) orElse { Option("") }}
-      try {
-        println("Running task " + event.task)
-        val eventIndex = events.indexOf(event).toString
+  def debugTask(
+    taskStageId: Int,
+    taskPartition: Int,
+    debugOpts: Option[String] = None
+  ) {
+    for {
+      elp <- eventLogPath orElse {
+        Option(System.getProperty("spark.logging.eventLog"))
+      }
+      sparkHome <- Option(sc.sparkHome) orElse { Option("") }
+      task <- taskWithId(taskStageId, taskPartition)
+      debugOptsString <- debugOpts orElse {
+        Option("-Xdebug -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8000")
+      }
+    } try {
+      println("Running task " + task)
 
-        // Launch the task in a separate JVM with debug options set
-        val pb = new ProcessBuilder(List(
-          "./run", "spark.DebuggingTaskRunner", elp, eventIndex, sc.master,
-          sc.frameworkName, sparkHome) ::: sc.jars.toList)
-        pb.environment.put("SPARK_DEBUG_OPTS", debugOpts)
-        pb.redirectErrorStream(true)
-        val proc = pb.start()
+      // Launch the task in a separate JVM with debug options set
+      val pb = new ProcessBuilder(List(
+        "./run", "spark.DebuggingTaskRunner", elp, taskStageId.toString,
+        taskPartition.toString, sc.master, sc.frameworkName, sparkHome
+      ) ::: sc.jars.toList)
+      pb.environment.put("SPARK_DEBUG_OPTS", debugOptsString)
+      pb.redirectErrorStream(true)
+      val proc = pb.start()
 
-        // Pipe the task's stdout and stderr to our own
-        new Thread {
-          override def run {
-            val procStdout = proc.getInputStream
-            var byte: Int = procStdout.read()
-            while (byte != -1) {
-              System.out.write(byte)
-              byte = procStdout.read()
-            }
+      // Pipe the task's stdout and stderr to our own
+      new Thread {
+        override def run {
+          val procStdout = proc.getInputStream
+          var byte: Int = procStdout.read()
+          while (byte != -1) {
+            System.out.write(byte)
+            byte = procStdout.read()
           }
-        }.start()
-        proc.waitFor()
-        println("Finished running task " + event.task)
+        }
+      }.start()
+      proc.waitFor()
+      println("Finished running task " + task)
     } catch {
       case ex =>
-        println("Failed to run task %s: %s".format(event.task, ex))
+        println("Failed to run task %s: %s".format(task, ex))
+    }
+  }
+
+  def debugException(event: ExceptionEvent, debugOpts: Option[String] = None) {
+    for ((taskStageId, taskPartition) <- event.task match {
+      case rt: ResultTask[_, _] => Some((rt.stageId, rt.partition))
+      case smt: ShuffleMapTask => Some((smt.stageId, smt.partition))
+      case _ => None
+    }) {
+      debugTask(taskStageId, taskPartition, debugOpts)
     }
   }
 

@@ -142,7 +142,6 @@ class EventLoggingSuite extends FunSuite {
       case RuntimeStatistics(rddId, _, mean, _) if rddId == slow.id =>
         mean
     }.toList
-    println(stats.length)
     assert(stats.length == 1)
     assert(stats.head >= 1000)
     sc2.stop()

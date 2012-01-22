@@ -6,7 +6,7 @@ import java.io.ObjectOutputStream
 import scala.collection.mutable.HashMap
 
 
-class ShuffleMapTask(stageId: Int, rdd: RDD[_], dep: ShuffleDependency[_,_,_], val partition: Int, locs: Seq[String])
+class ShuffleMapTask(stageId: Int, val rdd: RDD[_], dep: ShuffleDependency[_,_,_], val partition: Int, locs: Seq[String])
 extends DAGTask[String](stageId) with Logging {
   val split = rdd.splits(partition)
 
