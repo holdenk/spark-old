@@ -91,6 +91,10 @@ abstract class RDD[T: ClassManifest](@transient sc: SparkContext) extends Serial
   def sample(withReplacement: Boolean, fraction: Double, seed: Int): RDD[T] =
     new SampledRDD(this, withReplacement, fraction, seed)
 
+  def collectSample(withReplacement: Boolean, count: Int, seed: Int): RDD[T] =
+    new CollectSampledRDD(this, withReplacement, count, seed)
+
+
   def takeSample(withReplacement: Boolean, num: Int, seed: Int): Array[T] = {
   	var fraction = 0.0
   	var total = 0
