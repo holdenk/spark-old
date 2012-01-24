@@ -32,6 +32,8 @@ extends RDD[T](prev.context) {
       val oldData = prev.iterator(split.prev).toArray
       //Note if sampleSize > oldData.size this is a problem
       if (sampleSize > oldData.size) {
+      	 throw new SparkException("Sample size (" + sampleSize + 
+	 ") is larger than set being sampled from (" + oldData.size + ") without replacement")
       }
       val sampleData = new Array[T](sampleSize)
       for (i <- 1 to sampleSize) sampleData.update(i,oldData(i))
