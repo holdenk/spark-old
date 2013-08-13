@@ -106,6 +106,9 @@ class SparkContext(object):
         # Deploy any code dependencies specified in the constructor
         for path in (pyFiles or []):
             self.addPyFile(path)
+        for path in os.environ.get('PYSPARK_FILES', "").split(","):
+            if path != '':
+                self.addPyFile(path)
         SparkFiles._sc = self
         sys.path.append(SparkFiles.getRootDirectory())
 
